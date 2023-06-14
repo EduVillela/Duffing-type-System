@@ -1,3 +1,512 @@
-dfg
-dfgdfg
-dfgfg
+
+!**********************************************************
+!--------------- INITIAL CONFIGURATION --------------------
+!**********************************************************
+
+ ! DISPLACEMENT 
+    function u0(x)
+    real(8) :: u0, x, pi
+    
+    pi  = dacos(-1d0)
+    u0 = dsin(pi*x)
+    
+    return
+    end function
+        
+ ! VELOCITY 
+    function v0(x)
+    real(8) :: v0, x
+    
+     v0 = 0d0 
+               
+    return
+    end function
+!******************************************************   
+
+
+!******************************************************
+!--------- INITIAL PERTURBATION CONFIGURATION ---------
+!******************************************************
+  
+ ! DISPLACEMENT    
+    function uk0(x)
+    real(8) :: uk0, x !, pi
+    
+    
+    uk0 = 2.82469d0*dexp( -1d2*(x-5d-1)**2d0 )
+    
+    return
+    end function
+        
+ ! VELOCITY  
+    function vk0(x)
+    real(8) :: vk0, x
+    
+     vk0 = 0d0 
+               
+    return
+    end function
+!******************************************************       
+
+    
+    
+!*****************************************************
+!---------------PARAMETERS----------------------------
+!***************************************************** 
+
+! COUPLING PARAMETER
+    function lambda(x)
+    real(8) :: lambda, x
+    
+    lambda=5d-4 
+    
+    return
+    end function
+
+! COUPLING PARAMETER DERIVATIVE    
+    function lambdalinha(x)
+    real(8) :: lambdalinha, x
+    
+    lambdalinha=0d0
+    
+    return
+    end function
+
+! EXCITATION FUNCTIONS  
+  function g1(x)
+  real(8) :: g1, x
+    
+    g1 = 1d0
+    
+  return
+  end function    
+    
+!***************************************************** 
+    
+ 
+!!!!--------------------------------------------------!!!!
+!!!!---RUNGE-KUTTA 4TH ORDER AND 4TH ORDER IN SPACE---!!!!
+!!!!--------------------------------------------------!!!!
+    
+    program wave_equation
+    implicit none
+    
+!***************************************************** 
+!----------------PARAMETER VALUES---------------------      
+!*****************************************************  
+                                                              
+      integer, parameter :: Nx=5001                           
+      real(8),  parameter :: L=1d0, pi=dacos(-1d0)      
+      real(8), parameter ::  xi=5d-3, w=2d0     
+      real(8), parameter ::  periodo = 2d0*pi/w 
+      real(8), parameter ::  dt = periodo/1d4, Tmax = 2d0*periodo
+                    
+!*****************************************************  
+      real(8), dimension(Nx) :: pos, u, v, g                     
+      real(8), dimension(Nx) :: uk, vk           
+      integer :: i
+      real(8) :: dx, t, tstart, tfinal
+      real(8) :: u0, uk0, v0, vk0, lambda, lambdalinha, g1
+      real(8), dimension(Nx) :: lambdaa, lambdalinhaa
+             
+      real(8), dimension(Nx) :: Rnx, Rny
+      real(8), dimension(Nx) :: R1x, R1y
+      real(8), dimension(Nx) :: R2x, R2y
+      real(8), dimension(Nx) :: R3x, R3y
+      real(8), dimension(Nx) :: Rnkx, Rnky
+      real(8), dimension(Nx) :: R1kx, R1ky
+      real(8), dimension(Nx) :: R2kx, R2ky
+      real(8), dimension(Nx) :: R3kx, R3ky
+     
+      real(8) :: taux1, pertmag, pertcum, cummulativepertmag
+      real(8) ::  intt1,intt2,intt3 
+     
+      
+      
+            
+!*****************************************************  
+!------------------POSITION VECTOR--------------------      
+!*****************************************************  
+                                                   
+      dx = L/dfloat(Nx-1)                          
+                                                          
+      ! Position Vector                             
+         do i=1, Nx                                
+                                                   
+          pos(i)     = dx*dfloat(i-1)              
+          lambdaa(i) = lambda( pos(i) )                  
+          lambdalinhaa(i)      = lambdalinha( pos(i) )   
+         end do                                    
+         
+!*****************************************************      
+    
+
+!*****************************************************       
+!-----------------INITIAL CONDITION-------------------   
+!*****************************************************     
+                                                    
+         do i=1, Nx                                
+                                                   
+           u(i)  = u0( pos(i) )     
+           v(i)  = v0( pos(i) )     
+           uk(i) = uk0( pos(i) )                   
+           vk(i) = vk0( pos(i) )                   
+                                                    
+         end do  
+   
+!*****************************************************  
+
+
+!*****************************************************  
+!-----------------EXCITATION FUNCTION-----------------
+!*****************************************************                                          
+                                                   
+         do i=1, Nx                                
+                                                   
+           g(i)  = g1( pos(i) )                   
+      
+         end do  
+
+!*****************************************************               
+        
+!*****************************************************          
+!------------------OPENING FILES----------------------       
+!*****************************************************          
+       
+    open(unit=1, file='data1.dat', action="write", status="replace")         
+    
+    open(unit=2, file='data2.dat', action="write", status="replace")         
+    
+    open(unit=3, file='data3.dat', action="write", status="replace")         
+   
+!*****************************************************     
+
+
+call cpu_time(tstart)    
+  
+  taux1 = 0d0
+  pertcum = 0d0
+ cummulativepertmag = 0d0
+  
+t = 0d0
+call cpu_time(tstart)   
+do while (t.le.Tmax)           
+
+
+
+!*****************************************************        
+!---------------SAVING BIG DATA-----------------------
+!*****************************************************  
+                                                                        
+    if (t.ge.taux1 ) then                                             
+                            
+      call EC(Nx,dx,v,intt1)
+      call EpDeformacao(Nx,dx,lambdaa,u,intt2)                         
+      call EpDuffing(Nx,dx,u,intt3)   
+     
+      call Perturbation(dx,Nx,uk*uk + vk*vk,pertmag)     
+  
+  cummulativepertmag = cummulativepertmag + dlog(dsqrt(pertmag))          
+  
+  ! SAVING TIME, DISPLACEMENT AND LOCAL PERTURBATION DATA AT x=0.5                                                                         
+  write(1,*) t, u(2501), pertcum + dlog( dsqrt(uk(2501)*uk(2501) + &
+                                               vk(2501)*vk(2501)) )
+  
+  ! SAVING TIME AND MEAN PERTURBATION                                                                         
+  write(2,*) t, cummulativepertmag
+  
+  ! SAVING TIME, KINETIC ENERGY, EP AND ED                                                                         
+  write(3,*) t, intt1, intt2, intt3
+  
+               uk = uk/dsqrt(pertmag)
+               vk = vk/dsqrt(pertmag)     
+                                                          
+  pertcum  = pertcum + dlog(dsqrt(pertmag))
+                                                                     
+      taux1 = taux1 + periodo/10d0                                    
+      end if                                                         
+                                                    
+!*****************************************************        
+       
+!*****************************************************            
+!--------------RUNGE KUTTA 4TH ORDER------------------
+!***************************************************** 
+                                                                                                  
+       ! 1 STAGE                                                                                  
+  call R(Nx,dx,lambdaa,lambdalinhaa,u,v,uk,vk,xi,g,w,t,Rnx,Rny, &
+         Rnkx,Rnky)   
+                                                                                               
+                                                                                             
+       ! 2 STAGE                                                                             
+  call R(Nx,dx,lambdaa,lambdalinhaa,u+dt/2d0*Rnx,v+dt/2d0*Rny,uk+dt/2d0*Rnkx, &         
+         vk+dt/2d0*Rnky,xi,g,w,t+dt/2d0,R1x,R1y,R1kx,R1ky)                         
+                                                                                              
+                                                                                             
+       ! 3 STAGE                                                                              
+  call R(Nx,dx,lambdaa,lambdalinhaa,u+dt/2d0*R1x,v+dt/2d0*R1y,uk+dt/2d0*R1kx, &         
+         vk+dt/2d0*R1ky,xi,g,w,t+dt/2d0,R2x,R2y,R2kx,R2ky)                               
+                                                                                                  
+                                                                                                  
+       ! 4 STAGE                                                                                  
+  call R(Nx,dx,lambdaa,lambdalinhaa,u+dt*R2x,v+dt*R2y,uk+dt*R2kx,vk+dt*R2ky, &           
+         xi,g,w,t+dt,R3x,R3y,R3kx,R3ky)                                                  
+                                                                                                  
+     do i=2, Nx-1                                                                                  
+                                                                                                  
+     u(i) = u(i) + dt/6d0*( Rnx(i) + 2d0*R1x(i) + 2d0*R2x(i) + R3x(i) )                           
+     v(i) = v(i) + dt/6d0*( Rny(i) + 2d0*R1y(i) + 2d0*R2y(i) + R3y(i) )                              
+                                                                                                  
+     uk(i) = uk(i) + dt/6d0*( Rnkx(i) + 2d0*R1kx(i) + 2d0*R2kx(i) + R3kx(i)  )                       
+     vk(i) = vk(i) + dt/6d0*( Rnky(i) + 2d0*R1ky(i) + 2d0*R2ky(i) + R3ky(i)  )                       
+                                                                                                                                                                     ! 
+     end do                                                                                        
+     
+!*****************************************************        
+   
+t = t + dt    
+end do    
+
+close(1)
+close(2)
+close(3)
+
+call cpu_time(tfinal)
+print*, 'CPU TIME = ', tfinal-tstart   
+
+
+
+    stop
+    end program wave_equation
+!_______________________________________________________________
+
+!*****************************************************    
+!------SUBROUTINE FOR RUNGE-KUTTA 4TH ORDER-----------
+!*****************************************************
+  subroutine R(Nx, dx, lambdaa, lambdalinhaa, u, v, uk, vk, xi, g, w,t, Rx, &
+               Ry, Rkx, Rky)   
+  
+  integer, intent(in) :: Nx
+  real(8), intent(in) :: t, dx, xi, u(Nx), v(Nx), uk(Nx), vk(Nx)
+  real(8), intent(in) :: lambdaa(Nx), lambdalinhaa(Nx), g(Nx), w
+  real(8),  intent(out) :: Rx(Nx), Ry(Nx), Rkx(Nx), Rky(Nx)
+  
+  integer :: i
+  real(8) :: u1x, u2x, uk1x, uk2x
+  
+   
+   do i=2, Nx-1 
+    
+    if (i.eq.2) then  
+    
+     u1x = ( -3d0*u(i-1) -10d0*u(i) +18d0*u(i+1) -6d0*u(i+2) + u(i+3)   )&
+           /(12d0*dx)      
+     u2x = ( 10d0*u(i-1) -15d0*u(i) -4d0*u(i+1) +14d0*u(i+2) -6d0*u(i+3) &
+            +u(i+4) )/(12d0*dx*dx)
+            
+     uk1x = ( -3d0*uk(i-1) -10d0*uk(i) +18d0*uk(i+1) -6d0*uk(i+2) &
+             + uk(i+3)   )/(12d0*dx)      
+     uk2x = ( 10d0*uk(i-1) -15d0*uk(i) -4d0*uk(i+1) +14d0*uk(i+2) -6d0*uk(i+3) &
+            +uk(i+4) )/(12d0*dx*dx)       
+    
+    
+    else if (i.eq.(Nx-1)) then  
+    
+    
+     u1x = -( -3d0*u(i+1) -10d0*u(i) +18d0*u(i-1) -6d0*u(i-2) + u(i-3)  )&
+             /(12d0*dx)
+     u2x = ( 10d0*u(i+1) -15d0*u(i) -4d0*u(i-1) +14d0*u(i-2) -6d0*u(i-3) &
+            +u(i-4) )/(12d0*dx*dx)
+            
+     uk1x = -( -3d0*uk(i+1) -10d0*uk(i) +18d0*uk(i-1) -6d0*uk(i-2) + uk(i-3) )&
+              /(12d0*dx)
+     uk2x = ( 10d0*uk(i+1) -15d0*uk(i) -4d0*uk(i-1) +14d0*uk(i-2) -6d0*uk(i-3) &
+            +uk(i-4) )/(12d0*dx*dx)       
+
+    else
+    
+    u1x = ( -u(2+i) + 8d0*u(1+i) - 8d0*u(i-1) +u(-2+i))/(12d0*dx)
+    u2x = ( -u(i+2) + 16d0*u(i+1) - 30d0*u(i) + 16d0*u(i-1) -u(i-2))/(12d0*dx*dx)
+    
+    uk1x = ( -uk(2+i) + 8d0*uk(1+i) - 8d0*uk(i-1) +uk(-2+i))/(12d0*dx)
+    uk2x = ( -uk(i+2) + 16d0*uk(i+1) - 30d0*uk(i) + 16d0*uk(i-1) -uk(i-2)) &
+           /(12d0*dx*dx)
+    
+    end if    
+     
+    !------------------------------------------------------
+    
+    Rx(i) = v(i)
+    Ry(i) = lambdaa(i)*u2x + lambdalinhaa(i)*u1x - 2d0*xi*v(i) + 5d-1*u(i) &
+            -5d-1*u(i)*u(i)*u(i) + g(i)*dsin(w*t)
+    
+    Rkx(i) = vk(i)
+    Rky(i) = lambdaa(i)*uk2x + lambdalinhaa(i)*uk1x - 2d0*xi*vk(i) &
+             + 5d-1*uk(i) -15d-1*uk(i)*u(i)*u(i)
+    
+    
+   end do   
+   
+   Rx(1)= 0d0
+   Ry(1)= 0d0
+   Rkx(1)= 0d0
+   Rky(1)= 0d0
+   
+   Rx(Nx)= 0d0 
+   Ry(Nx)= 0d0   
+   Rkx(Nx)= 0d0 
+   Rky(Nx)= 0d0
+     
+  end subroutine R
+!*****************************************************    
+
+
+!*****************************************************    
+!-----------PERTURBATION MAGNITUDE--------------------
+!*****************************************************    
+
+  subroutine Perturbation(dx,Nx,uin,intvalue)
+ 
+ integer, intent(in) :: Nx
+ real(8), intent(in) :: dx, uin(Nx)
+ real(8), intent(out) :: intvalue
+ 
+ integer :: i
+ 
+ 
+ intvalue = 0d0
+ 
+ do i=1, Nx-2, 2
+ 
+ intvalue = intvalue + (dx/3d0)*( uin(i) + 4d0*uin(i+1) + uin(i+2) )  
+ 
+ end do
+ 
+ end subroutine Perturbation
+!*****************************************************    
+ 
+ 
+ 
+!*****************************************************       
+!----------DEFORMATION ENERGY-------------------------
+!*****************************************************
+  
+ subroutine EpDeformacao(Nx,dx,lambdaa,uin,intvalue)
+ 
+ integer, intent(in) :: Nx
+ real(8), intent(in) :: dx, uin(Nx), lambdaa(Nx)
+ real(8), intent(out) :: intvalue
+ 
+ integer :: i
+ real(8) :: lambda, uaux(Nx)
+ 
+  
+ do i=1, Nx
+ 
+ if (i.eq.1) then
+ 
+ uaux(i) = (uin(2)-uin(1))/dx
+ 
+ else if (i.eq.2) then
+ 
+ uaux(i)= ( -3d0*uin(i-1) -10d0*uin(i) +18d0*uin(i+1) -6d0*uin(i+2) &
+          + uin(i+3) )/(12d0*dx) 
+          
+  else if (i.eq.Nx-1) then
+ 
+ uaux(i) = -( -3d0*uin(i+1) -10d0*uin(i) +18d0*uin(i-1) -6d0*uin(i-2) &
+            + uin(i-3)  )/(12d0*dx)
+ 
+ else if (i.eq.Nx) then
+ 
+ uaux(i)= (uin(Nx)-uin(Nx-1))/dx
+ 
+ 
+ else
+ 
+ 
+ uaux(i) = ( -uin(2+i) + 8d0*uin(1+i) - 8d0*uin(i-1) +uin(-2+i))/(12d0*dx)  
+           
+ end if    
+ 
+ uaux(i) = 5d-1*lambdaa(i)*uaux(i)*uaux(i)
+       
+ end do
+ 
+ 
+ intvalue = 0d0
+  
+ do i=1, Nx-2, 2
+ 
+ intvalue = intvalue + (dx/3d0)*( uaux(i) + 4d0*uaux(i+1) + uaux(i+2) )  
+ 
+ end do
+ 
+ end subroutine EpDeformacao
+!*****************************************************       
+
+
+!*****************************************************        
+!-----------DUFFING SPRING ENERGY---------------------
+!*****************************************************
+
+ subroutine EpDuffing(Nx,dx,uin,intvalue)
+ 
+ integer, intent(in) :: Nx
+ real(8), intent(in) :: dx, uin(Nx)
+ real(8), intent(out) :: intvalue
+ 
+ integer :: i
+ real(8) :: uaux(Nx)
+ 
+  
+ do i=1, Nx
+ 
+ uaux(i) = -25d-2*uin(i)*uin(i) &
+           + 1d0/8d0*uin(i)*uin(i)*uin(i)*uin(i) + 125d-3
+       
+ end do
+ 
+ 
+ intvalue = 0d0
+  
+ do i=1, Nx-2, 2
+ 
+ intvalue = intvalue + (dx/3d0)*( uaux(i) + 4d0*uaux(i+1) + uaux(i+2) )  
+ 
+ end do
+ 
+ end subroutine EpDuffing
+!*****************************************************       
+ 
+ 
+!*****************************************************       
+!-------------KINTIC ENERGY---------------------------
+!*****************************************************       
+
+ subroutine EC(Nx,dx,uin,intvalue)
+ 
+ integer, intent(in) :: Nx
+ real(8), intent(in) :: dx, uin(Nx)
+ real(8), intent(out) :: intvalue
+ 
+ integer :: i
+ real(8) :: uaux(Nx)
+ 
+  
+ do i=1, Nx
+ 
+ uaux(i) = 5d-1*uin(i)*uin(i)
+       
+ end do
+ 
+ 
+ intvalue = 0d0
+  
+ do i=1, Nx-2, 2
+ 
+ intvalue = intvalue + (dx/3d0)*( uaux(i) + 4d0*uaux(i+1) + uaux(i+2) )  
+ 
+ end do
+ 
+ end subroutine EC
+!*****************************************************       
