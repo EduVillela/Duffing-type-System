@@ -118,7 +118,7 @@
       real(8), dimension(Nx) :: R2kx, R2ky
       real(8), dimension(Nx) :: R3kx, R3ky
      
-      real(8) :: taux1, pertmag, pertcum, cummulativepertmag
+      real(8) :: taux1, pertmag, pertcum
       real(8) ::  intt1,intt2,intt3 
      
       
@@ -186,7 +186,6 @@ call cpu_time(tstart)
   
   taux1 = 0d0
   pertcum = 0d0
- cummulativepertmag = 0d0
   
 t = 0d0
 call cpu_time(tstart)   
@@ -205,24 +204,22 @@ do while (t.le.Tmax)
       call EpDuffing(Nx,dx,u,intt3)   
      
       call Perturbation(dx,Nx,uk*uk + vk*vk,pertmag)     
-  
-  cummulativepertmag = cummulativepertmag + dlog(dsqrt(pertmag))          
-  
+   
+   pertcum  = pertcum + dlog(dsqrt(pertmag))
+   
   ! SAVING TIME, DISPLACEMENT AND LOCAL PERTURBATION DATA AT x=0.5                                                                         
   write(1,*) t, u(2501), pertcum + dlog( dsqrt(uk(2501)*uk(2501) + &
                                                vk(2501)*vk(2501)) )
   
   ! SAVING TIME AND MEAN PERTURBATION                                                                         
-  write(2,*) t, cummulativepertmag
+  write(2,*) t, pertcum
   
   ! SAVING TIME, KINETIC ENERGY, EP AND ED                                                                         
   write(3,*) t, intt1, intt2, intt3
   
                uk = uk/dsqrt(pertmag)
                vk = vk/dsqrt(pertmag)     
-                                                          
-  pertcum  = pertcum + dlog(dsqrt(pertmag))
-                                                                     
+                                                                                                                               
       taux1 = taux1 + periodo/10d0                                    
       end if                                                         
                                                     
